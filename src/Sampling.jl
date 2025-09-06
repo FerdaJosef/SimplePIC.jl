@@ -14,24 +14,23 @@
     rho[xl+2] += w
 end
 
-#= @inline function sample_linear!(rho::Vector{Float64}, vsum::Vector{SVector{3, Float64}}, weight::SVector{3, Float64}, x::Float64, nx::Int64, dx::Float64)
+@inline function sample_linear!(rho::Vector{Float64}, vsum::Vector{SVector{3, Float64}}, weight::SVector{3, Float64}, x::Float64, nx::Int64, dx::Float64)
     xi = x/dx
     xl = floor(Int64, xi)
     w = xi-xl
-    #=
-    if xl <= -1
-        println("sample err ", x, " ", xi, " ", xl)
-    end
-    if xl >= nx-1
-        println("sample max err ", x, " ", xi, " ", xl)
-    end
-    =#
     rho[xl+1] += 1-w
     rho[xl+2] += w
     vsum[xl+1] += (1-w)*weight
     vsum[xl+2] += w*weight
-end =#
+end
 
+@inline function sample_linear!(vsum::Vector{SVector{3, Float64}}, weight::SVector{3, Float64}, x::Float64, nx::Int64, dx::Float64)
+    xi = x/dx
+    xl = floor(Int64, xi)
+    w = xi-xl
+    vsum[xl+1] += (1-w)*weight
+    vsum[xl+2] += w*weight
+end
 
 @inline function sample_linear!(rho::Vector{Float64}, x::SVector{1, Float64}, nx::Int64, dx::Float64)
     sample_linear!(rho, x[1], nx, dx)

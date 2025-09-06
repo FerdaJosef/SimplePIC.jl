@@ -31,7 +31,7 @@ export PIC, Diagnostic, RhoProbe, EnergyProbe, NxProbe, NvxProbe, EProbe, PSxPro
 export sample, poisson_solve, interpolate, advance, advance_v, init_leapfrog, solve_init, solve_init_fft, particle_bc
 export inject
 export random_maxwell_vflux, random_maxwell_v, random
-export Circuit, interpolate_current, advance_external, maxwell_solve, advance_current, advance_v_all
+export Circuit, interpolate_current, advance_external, maxwell_solve, advance_current, advance_v_all, poisson_solver
 
 
 abstract type AbstractField end
@@ -150,7 +150,7 @@ function PIC(particles::Vector{ParticleEnsemble{ParticleType}}, interactions::Ve
         zeros(geo.nx),
         zeros(MVector{vdim, Float64}, geo.nx),
         0.,
-        epsilon_0, 0.0, 0.0, zeros(SVector{vdim, Float64}, geo.nx), zeros(SVector{vdim, Float64}, geo.nx), zeros(SVector{vdim, Float64}, geo.nx), zeros(MVector{vdim, Float64}, geo.nx))
+        epsilon_0, 0.0, 0.0, zeros(SVector{vdim, Float64}, geo.nx), zeros(SVector{vdim, Float64}, geo.nx), zeros(SVector{vdim, Float64}, geo.nx), zeros(MVector{vdim, Float64}, geo.nx - 1))
 end
 
 include("Sampling.jl")
@@ -209,6 +209,31 @@ function interpolate_current(particles::ParticleEnsemble, dx::Float64, nx::Int64
             J[xl+2] = J[xl+2] + particles.q*p.v*1/2*w
         end
     return J
+end
+
+function interpolate_current(particles::ParticleEnsemble, dx::Float64, nx::Int64)
+    J = zeros(SVector{3, Float64}, nx)
+        for p in particles.coords
+            sample_linear!(J, particles.q*p.v, p.r[1], nx, dx)
+        end
+    return J
+end
+
+function interpolate_B!(particles::ParticleEnsemble, dx::Float64, B::Vector{MVector{3,Float64}})
+    nxm1 = length(B) # nx-1
+    for p in particles.coords
+        xi = p.r[1] / dx - 0.5
+        # clamp to [0, nx-2] to avoid out of bounds
+        xl = clamp(floor(Int, xi), 0, nxm1 - 1)
+        w = xi - xl
+        # B at half cells: B[xl+1] and B[xl+2] exist for xl in [0, nxm1-2]
+        # convert indices: in Julia indexing is 1-based
+        i1 = xl + 1
+        i2 = min(xlm1, xl+2) # safe guard
+        bvec = (1-w) * B[i1] + w * B[i2]
+        # set only the B vector on the particle
+        p.B = bvec
+    end
 end
 
 function advance_position(particles::ParticleEnsemble, interactions::Interactions, dt::Float64)
@@ -360,13 +385,38 @@ function maxwell_solve(pic::PIC, dt::Float64)
     pic.B = B
 end
 
+function maxwell_solver(pic::PIC, dt::Float64)
+    dx = pic.dx
+    nx = pic.nx
+    eps0 = pic.epsilon_0
+    E = pic.E
+    B = pic.B
+    for k in 1:(nx-1)
+        Bz_old = B[k][3]
+        Bz_new = Bz_old - (dt/dx)*(E[k+1][2] - E[k][2])
+        B[k] = MVector(B[k][1], B[k][2], Bz_new)
+    end
+
+    for i in 1:(nx-1)
+        Ey_old = E[i][2]
+        Jy = pic.J[i][2]
+        b_iphalf = (i <= nx-1) ? B[i][3] : 0.0
+        b_imhalf = (i >= 2) ? B[i-1][3] : 0.0
+        Ey_new = Ey_old - (dt/dx)/eps0*(b_iphalf - b_imhalf) - Jy*dt/eps0
+        E[i] = MVector(E[i][1], Ey_new, E[i][3])
+    end
+
+    pic.E = E
+    pic.B = B
+end
+
 #poisson_solve(pic::PIC) = poisson_solve(pic)
 #poisson_solve(pic::PIC, lu) = poisson_solve(pic::PIC, lu)
 
 function interpolate(pic::PIC)
     for p in pic.particles
         interpolate_linear(p, pic.dx, pic.E)
-        interpolate_linear(p, pic.dx, pic.B)
+        interpolate_B!(p, pic.dx, pic.B)
     end
 end
 
@@ -379,11 +429,23 @@ end
 
 function advance_current(pic::PIC, dt::Float64)
     for (parts, inter) in zip(pic.particles, pic.interactions)
-        pic.J_minus = interpolate_current(parts, pic.dx, pic.nx)
+        pic.J_minus .+= interpolate_current(parts, pic.dx, pic.nx)
         advance_position(parts, inter, dt)
         particle_bc(parts, pic, pic.xmax, pic.BC)
-        pic.J_plus = interpolate_current(parts, pic.dx, pic.nx)
-        pic.J .= (pic.J_minus .+ pic.J_plus) ./ 2
+        pic.J_plus .+= interpolate_current(parts, pic.dx, pic.nx)
+    end
+    pic.J .= (pic.J_minus .+ pic.J_plus) ./ 2
+end
+
+function interpolate_current(pic::PIC)
+    for p in pic.particles
+        interpolate_current(p, pic.dx, pic.nx)
+    end
+end
+
+function advance_position(pic::PIC, dt::Float64)
+    for (parts, inter) in zip(pic.particles, pic.interactions)
+        advance_position(parts, inter, dt)
     end
 end
 
