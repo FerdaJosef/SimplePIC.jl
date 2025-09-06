@@ -1,7 +1,6 @@
 module SimplePIC
 
-include("MonteCarloCollisions.jl")
-using .MonteCarloCollisions
+using MonteCarloCollisions
 
 import Interpolations as itp
 import LinearAlgebra as linalg
