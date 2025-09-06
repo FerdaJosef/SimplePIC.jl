@@ -2,7 +2,6 @@ module SimplePIC
 
 using MonteCarloCollisions
 
-import Interpolations as itp
 import LinearAlgebra as linalg
 using Plots
 using FFTW

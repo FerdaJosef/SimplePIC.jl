@@ -1199,7 +1199,7 @@ version = "1.2.0"
 
 [[deps.SimplePIC]]
 deps = ["Distributions", "FFTW", "LinearAlgebra", "MonteCarloCollisions", "Plots", "Random", "SparseArrays", "StaticArrays", "StatsBase"]
-git-tree-sha1 = "3598421f31fc815591367c47ff7b1bbdd4726165"
+git-tree-sha1 = "7b654a3fda68aa20db682d58566761c6694da375"
 repo-rev = "pepa"
 repo-url = "https://github.com/FerdaJosef/SimplePIC.jl"
 uuid = "0491d90b-bdae-4f99-86d9-be190dd34edd"
