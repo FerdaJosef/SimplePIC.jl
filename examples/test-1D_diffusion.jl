@@ -9,13 +9,27 @@ end
 
 Random.seed!(1234)
 
+#=
 c_speed = 299792458.0
-tmax = 5e-7
-dt = 5e-10
+tmax = 5e-6
+dt = 5e-9
 ne = 200000
 nx = 201
 dx = c_speed*dt
 xmax = (ne-1)*dx
+nv = 151
+vmax = 2000.
+dV = 1e-10
+ntmax = Int64(ceil(tmax/dt))
+exc = 0.01
+=#
+
+tmax = 5e-6
+dt = 5e-9
+ne = 200000
+nx = 201
+xmax = 0.01
+dx = xmax/(nx-1)
 nv = 151
 vmax = 2000.
 dV = 1e-10
@@ -102,10 +116,14 @@ function pic_sim(pic, probes, dt, ntmax)
     init_leapfrog(pic, dt)
     for nt in 1:ntmax
         sample(pic)
-        advance_current(pic, dt)
+        pic.J_minus = interpolate_current(pic)
+        advance_position(pic, dt)
+        particle_bc(pic)
+        pic.J_plus .+= interpolate_current(pic)
+        pic.J .= (pic.J_minus .+ pic.J_plus)/2
         advance_external(pic, obvod, nt * dt, dt)
         poisson_solve(pic)
-        maxwell_solve(pic, dt)
+        maxwell_solver(pic, dt)
         interpolate(pic)
         advance_v_all(pic, dt) #Boris
         if nt % 5 == 1
