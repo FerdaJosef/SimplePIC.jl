@@ -485,7 +485,7 @@ end
 function init_leapfrog(pic::PIC, dt::Float64)
     sample(pic)
     poisson_solve(pic)
-    maxwell_solve(pic, dt)
+    maxwell_solver(pic, dt)
     interpolate(pic)
     for p in pic.particles
         advance_v(p, -dt/2)
