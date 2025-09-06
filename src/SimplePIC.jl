@@ -1,4 +1,4 @@
-module DirichletPIC
+module SimplePIC
 
 include("MonteCarloCollisions.jl")
 using .MonteCarloCollisions

@@ -2,27 +2,13 @@ using StaticArrays
 using Random
 using Printf
 
-if !isdefined(Main, :DirichletPIC)
-    include("DirichletPIC.jl")
-    using .DirichletPIC
-end
+using SimplePIC
+
+plotdir = "./plots-1D_diffusion/"
+sampling_period = 5
+mkpath(plotdir)
 
 Random.seed!(1234)
-
-#=
-c_speed = 299792458.0
-tmax = 5e-6
-dt = 5e-9
-ne = 200000
-nx = 201
-dx = c_speed*dt
-xmax = (ne-1)*dx
-nv = 151
-vmax = 2000.
-dV = 1e-10
-ntmax = Int64(ceil(tmax/dt))
-exc = 0.01
-=#
 
 tmax = 5e-6
 dt = 5e-9
@@ -139,42 +125,16 @@ function pic_sim(pic, probes, dt, ntmax)
     end
 end
 
-#=
-function pic_sim(pic, probes, dt, ntmax)
-    particle_bc(pic)
-    init_leapfrog(pic, dt, 0.0)
-    for nt in 1:ntmax
-        sample(pic)
-
-        poisson_solve(pic, lu)
-        interpolate(pic)
-        advance(pic, dt)
-
-        inject(electrons, rand(Poisson(ne_inject)), T_inject, xmax, nt*dt, dt)
-        inject(argonplus, rand(Poisson(np_inject)), T_inject, xmax, nt*dt, dt)
-
-        if nt % 5 == 1
-            println(nt, " ", length(electrons.coords), " ", rand(Poisson(ne_inject)))
-            for (key, probe) in probes
-                sample!(probe, pic, nt*dt)
-            end
-        end
-    end
-end
-=#
-
-# pic_sim(pic, probes, dt, ntmax)
-
 pic_sim(pic, probes, dt, ntmax)
 
 using Plots
 
-Folder = "Figures/"
-
 for (key, probe) in probes
-    probeplt = DirichletPIC.plt(probe)
-    savefig(probeplt, joinpath(Folder, "plot_"*string(key)*".png"))
+    probeplt = SimplePIC.plt(probe)
+    savefig(probeplt, plotdir*"plot_"*string(key)*".png")
 end
+
+using Plots
 
 probe = probes[:nx_probe1]
 nsampl = length(probe.Nx) ÷ 10
@@ -187,7 +147,7 @@ plt = plot(x, n1)
 plt = plot!(x, n2)
 plt = plot!(x, n2 .- n1)
 
-savefig(plt, joinpath(Folder, "plot_nxcut.png"))
+savefig(plt, plotdir*"plot_nxcut.png")
 
 probe = probes[:nx_probe1]
 x = LinRange(probe.xrange..., probe.nx)
@@ -197,26 +157,26 @@ probe = probes[:nx_probe2]
 x = LinRange(probe.xrange..., probe.nx)
 plt = plot!(probe.ts, map(sum, probe.Nx))
 
-savefig(plt, joinpath(Folder, "plot_nsum.png"))
+savefig(plt, plotdir*"plot_nsum.png")
 
 
 probe1 = probes[:nx_probe1]
 probe2 = probes[:nx_probe2]
 Uprobe = probes[:U_probe]
 x = LinRange(probe1.xrange..., probe1.nx)
+println("animating nxcut")
 anim = @animate for i in 1:(length(probe.Nx)-nsampl)
-    println("anim ", i)
     n1 = sum(probe1.Nx[i:i+nsampl])./nsampl
     n2 = sum(probe2.Nx[i:i+nsampl])./nsampl
     U = sum(Uprobe.Us[i:i+nsampl])./nsampl
     plt1 = plot(x, n1,
         label=@sprintf("t = %.1f ns", probe1.ts[i]*1e9),
-        legend=:topleft,
+        legend=:topright,
         ylabel="rho (a.u.)"
         )
     plt2 = plot(x, U,
         label=@sprintf("t = %.1f ns", probe1.ts[i]*1e9),
-        legend=:topleft,
+        legend=:topright,
         ylabel="U (V)",
         xlabel="x (m)"
         )
@@ -224,4 +184,4 @@ anim = @animate for i in 1:(length(probe.Nx)-nsampl)
     plot!(plt1, x, n2 .- n1, label="")
     plot(plt1, plt2, layout = grid(2, 1, heights=[0.5 ,0.5]))
 end
-gif(anim, joinpath(Folder, "plot_nxcut_anim.gif"), fps = 15)
+gif(anim, plotdir*"plot_nxcut_anim.gif", fps = 15)
