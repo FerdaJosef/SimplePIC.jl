@@ -4,6 +4,8 @@ using Printf
 
 using SimplePIC
 
+const k_B = 1.380649e-23
+
 plotdir = "./plots-1D_diffusion/"
 sampling_period = 5
 mkpath(plotdir)
@@ -101,6 +103,8 @@ function pic_sim(pic, probes, dt, ntmax)
     particle_bc(pic)
     init_leapfrog(pic, dt)
     for nt in 1:ntmax
+        fill!(pic.J_minus, SVector{3,Float64}(0.0,0.0,0.0))
+        fill!(pic.J_plus,  SVector{3,Float64}(0.0,0.0,0.0))
         sample(pic)
         pic.J_minus = interpolate_current(pic)
         advance_position(pic, dt)

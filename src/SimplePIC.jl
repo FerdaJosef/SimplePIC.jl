@@ -29,7 +29,7 @@ export PIC, Diagnostic, RhoProbe, EnergyProbe, NxProbe, NvxProbe, EProbe, PSxPro
 export sample, poisson_solve, interpolate, advance, advance_v, init_leapfrog, solve_init, solve_init_fft, particle_bc
 export inject
 export random_maxwell_vflux, random_maxwell_v, random
-export Circuit, interpolate_current, advance_external, maxwell_solve, advance_current, advance_v_all, poisson_solver
+export Circuit, interpolate_current, advance_external, maxwell_solve, advance_current, advance_v_all, poisson_solver, advance_position, maxwell_solver
 
 
 abstract type AbstractField end
@@ -172,41 +172,36 @@ function interpolate_linear(particles::ParticleEnsemble, dx::Float64, E::Vector{
     end
 end
 
-function interpolate_linear(particles::ParticleEnsemble, dx::Float64, E::Vector{Float64})
+@inline function interpolate_linear_E(x::Float64, dx::Float64, E::Vector{T}) where T
+    xi = x/dx
+    xl = trunc(Int, xi)
+    xl = clamp(xl, 0, length(E)-2)
+    w = xi - xl
+    return E[xl+1]*(1-w) + E[xl+2]*w
+end
+
+@inline function interpolate_linear_B(x::Float64, dx::Float64, B::Vector{T}) where T
+    xi = x/dx - 0.5
+    xl = trunc(Int, xi)
+    xl = clamp(xl, 0, length(B)-2)
+    w = xi - xl
+    return B[xl+1]*(1-w) + B[xl+2]*w
+end
+
+function interpolate_fields!(particles::ParticleEnsemble, dx::Float64, E::Array{MVector{3,Float64}}, B::Array{MVector{3,Float64}})
     for p in particles.coords
-        p.E = SVector(interpolate_linear(p.r[1], dx, E), 0, 0)
+        e = interpolate_linear_E(p.r[1], dx, E)
+        
+        b = interpolate_linear_B(p.r[1], dx, B)
+        p.E = SVector{3,Float64}(e)  # ensure immutable type on particle
+        p.B = SVector{3,Float64}(b)
     end
 end
 
-#=
-function interpolate_current(pic::PIC, dt::Float64)
-    J = [SVector{3, Float64}(0.0, 0.0, 0.0) for i in 1:pic.nx]
-    for parts in pic.particles
-        for p in parts.coords
-            xi1 = p.r[1]/pic.dx
-            xl1 = trunc(Int, xi1)
-            xi2 = (p.r[1]+p.v[1]*dt)/pic.dx
-            xl2 = trunc(Int, xi2)
-            w1 = xi1 - xl1
-            w2 = xi2 - xl2
-            J[xl1+1] = J[xl1+1] + p.q*p.v*1/2*((1-w1)+(1-w2))
-            J[xl2+1] = J[xl2+1] + p.q*p.v*1/2*(1 - ((1-w1)+(1-w2)))
-        end
+function interpolate(pic::PIC)
+    for p in pic.particles
+        interpolate_fields!(p, pic.dx, pic.E, pic.B)
     end
-    return J
-end
-=#
-
-function interpolate_current(particles::ParticleEnsemble, dx::Float64, nx::Int64)
-    J = zeros(SVector{3, Float64}, nx)
-        for p in particles.coords
-            xi = p.r[1]/dx
-            xl = floor(Int, xi)
-            w = xi - xl
-            J[xl+1] = J[xl+1] + particles.q*p.v*1/2*(1-w)
-            J[xl+2] = J[xl+2] + particles.q*p.v*1/2*w
-        end
-    return J
 end
 
 function interpolate_current(particles::ParticleEnsemble, dx::Float64, nx::Int64)
@@ -217,21 +212,12 @@ function interpolate_current(particles::ParticleEnsemble, dx::Float64, nx::Int64
     return J
 end
 
-function interpolate_B!(particles::ParticleEnsemble, dx::Float64, B::Vector{MVector{3,Float64}})
-    nxm1 = length(B) # nx-1
-    for p in particles.coords
-        xi = p.r[1] / dx - 0.5
-        # clamp to [0, nx-2] to avoid out of bounds
-        xl = clamp(floor(Int, xi), 0, nxm1 - 1)
-        w = xi - xl
-        # B at half cells: B[xl+1] and B[xl+2] exist for xl in [0, nxm1-2]
-        # convert indices: in Julia indexing is 1-based
-        i1 = xl + 1
-        i2 = min(xlm1, xl+2) # safe guard
-        bvec = (1-w) * B[i1] + w * B[i2]
-        # set only the B vector on the particle
-        p.B = bvec
+function interpolate_current(pic::PIC)
+    J_total = zeros(SVector{3, Float64}, pic.nx)
+    for p in pic.particles
+        J_total .+= interpolate_current(p, pic.dx, pic.nx)
     end
+    return J_total
 end
 
 function advance_position(particles::ParticleEnsemble, interactions::Interactions, dt::Float64)
@@ -395,7 +381,7 @@ function maxwell_solver(pic::PIC, dt::Float64)
         B[k] = MVector(B[k][1], B[k][2], Bz_new)
     end
 
-    for i in 1:(nx-1)
+    for i in 1:nx
         Ey_old = E[i][2]
         Jy = pic.J[i][2]
         b_iphalf = (i <= nx-1) ? B[i][3] : 0.0
@@ -411,12 +397,14 @@ end
 #poisson_solve(pic::PIC) = poisson_solve(pic)
 #poisson_solve(pic::PIC, lu) = poisson_solve(pic::PIC, lu)
 
+#=
 function interpolate(pic::PIC)
     for p in pic.particles
-        interpolate_linear(p, pic.dx, pic.E)
-        interpolate_B!(p, pic.dx, pic.B)
+        p.E = interpolate_linear_E(p, pic.dx, pic.E)
+        p.B = interpolate_linear_B(p, pic.dx, pic.B)
     end
 end
+=#
 
 function particle_bc(pic::PIC)
     for p in pic.particles
@@ -433,12 +421,6 @@ function advance_current(pic::PIC, dt::Float64)
         pic.J_plus .+= interpolate_current(parts, pic.dx, pic.nx)
     end
     pic.J .= (pic.J_minus .+ pic.J_plus) ./ 2
-end
-
-function interpolate_current(pic::PIC)
-    for p in pic.particles
-        interpolate_current(p, pic.dx, pic.nx)
-    end
 end
 
 function advance_position(pic::PIC, dt::Float64)
