@@ -27,7 +27,7 @@ export PIC, Diagnostic, RhoProbe, EnergyProbe, NxProbe, NvxProbe, EProbe, PSxPro
 export sample, poisson_solve, interpolate, advance, init_leapfrog, solve_init, solve_init_fft, particle_bc
 
 export random_maxwell_v, random_maxwell_vcomponent, random_maxwell_vflux
-
+export inject
 
 
 abstract type AbstractField end
@@ -82,7 +82,17 @@ function insert(particles::ParticleEnsemble, p::AbstractParticle)
     push!(particles.coords, p)
 end
 
-
+function inject(particles::ParticleEnsemble, nparticles::Int, T::Float64, xmax::Float64, t::Float64, dt::Float64)
+    for _ in 1:nparticles
+        vth = sqrt(2*k_B*T/particles.m)
+        v = SVector{3, Float64}(-random_maxwell_vflux(vth), random_maxwell_vcomponent(vth), random_maxwell_vcomponent(vth))
+        x = SVector{1, Float64}(xmax+dt*v[1]*rand())
+        E = SVector{3, Float64}(0, 0, 0)
+        tau = Inf
+        p = Particle1d3vE(x, v, E, t, tau)
+        push!(particles.coords, p)
+    end
+end
 
 mutable struct PIC{dim, ParticleType, GeometryType, BCType, vdim} 
     #where ParticleType <: AbstractParticle where FieldType <: AbstractField where BCType <: BoundaryCondition

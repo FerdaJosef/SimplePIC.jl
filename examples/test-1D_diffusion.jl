@@ -30,6 +30,14 @@ argon_interaction_list = load_interactions_lxcat("data/CS_Arp_Ar_Phelps.txt", el
 electron_interactions = make_interactions(electrons, electron_interaction_list);
 argonplus_interactions = make_interactions(argonplus, argon_interaction_list, 1.0);
 
+T_inject = 300.0
+A = dV/dx
+vth_e = sqrt(8*k_B*T_inject/(pi*electrons.m))
+vth_p = sqrt(8*k_B*T_inject/(pi*argonplus.m))
+#inject_density = ne/(A*xmax)
+inject_density = 5e10
+ne_inject = 1/4*A*inject_density*vth_e*dt
+np_inject = 1/4*A*inject_density*vth_p*dt
 
 #electrons.x = collect(0:(ne-1))*xmax/ne
 xs = LinRange(xmax*0.0, xmax*1.0, ne)
@@ -70,9 +78,11 @@ function pic_sim(pic, probes, dt, ntmax)
         poisson_solve(pic, lu)
         interpolate(pic)
         advance(pic, dt)
-        
+
+        inject(electrons, rand(Poisson(ne_inject)), T_inject, xmax, nt*dt, dt)
+        inject(argonplus, rand(Poisson(np_inject)), T_inject, xmax, nt*dt, dt)
         if nt % 5 == 1
-            println(nt, " ", length(electrons.coords))
+            println(nt, " ", length(electrons.coords), " ", rand(Poisson(ne_inject)))
             for (key, probe) in probes
                 sample!(probe, pic, nt*dt)
             end
