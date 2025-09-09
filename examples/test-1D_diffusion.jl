@@ -1,6 +1,7 @@
 using StaticArrays
 using Random
 using Printf
+using Distributions: Poisson
 
 using SimplePIC
 
@@ -10,9 +11,12 @@ mkpath(plotdir)
 
 Random.seed!(1234)
 
+const k_B = 1.380649e−23
+
 ne = 200000
 nx = 201
 xmax = 0.01
+dx = xmax/(nx-1)
 nv = 151
 vmax = 2000.
 dt = 5e-9
