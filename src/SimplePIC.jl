@@ -1,6 +1,7 @@
 module SimplePIC
 
-using MonteCarloCollisions
+include("MonteCarloCollisions.jl")
+using .MonteCarloCollisions
 
 using Plots
 using FFTW
@@ -13,10 +14,8 @@ const epsilon_0 = 8.8541878128e-12
 const e = 1.60217662e-19
 const m_e = 9.10938356e-31
 const m_p = 1.6726219e-27
-const k_B = 1.380649e-23
 
-export m_e, q_e, amu
-export k_B
+export m_e, q_e, amu, k_B
 export NeutralEnsemble, ParticleEnsemble, Particle1d3v, Particle3d3v, Particle0d3v, Particle1d3vE, Particle1d1vE
 export Cartesian1D, CylindricalR, BCDirichlet1D, BCPeriodic1D
 export Neutrals, Particles, AbstractParticle, Interaction, Interactions, add_interaction!
