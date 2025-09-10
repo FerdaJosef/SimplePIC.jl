@@ -1,4 +1,4 @@
-module MonteCarloCollisions
+module MonteCarloCollisions0
 
 using StaticArrays
 using PhysicalConstants.CODATA2018

@@ -1,7 +1,7 @@
 module SimplePIC
 
 include("MonteCarloCollisions.jl")
-using .MonteCarloCollisions
+using .MonteCarloCollisions0
 
 using Plots
 using FFTW
@@ -84,7 +84,6 @@ function insert(particles::ParticleEnsemble, p::AbstractParticle)
 end
 
 function inject(particles::ParticleEnsemble, nparticles::Int, T::Float64, xmax::Float64, t::Float64, dt::Float64)
-    k_B = 1.380649e-23
     for _ in 1:nparticles
         vth = sqrt(2*k_B*T/particles.m)
         v = SVector{3, Float64}(-random_maxwell_vflux(vth), random_maxwell_vcomponent(vth), random_maxwell_vcomponent(vth))
